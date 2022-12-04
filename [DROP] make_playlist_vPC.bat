@@ -17,7 +17,6 @@ if not exist "%_folder%\" echo not a valid folder&pause&exit
 set _arcade=0
 if exist "%_home%\arcade.txt" set _arcade=1
 
-
 (echo {
  echo   "version": "1.0",
  echo   "items": [) >"%_folder%.lpl"
@@ -65,12 +64,13 @@ echo       "path": "%_path%",)>>"%_folder%.lpl"
 
 set _flag=0
 if %_arcade% equ 1 (
-	for /f "tokens=2 delims=|" %%h in ('findstr /bc:"%~n1|" "%_home%\arcade.txt"') do (
+	for /f "tokens=2 delims=|" %%h in ('findstr /lbc:"%~n1|" "%_home%\arcade.txt"') do (
 		(echo       "label": "%%h",)>>"%_folder%.lpl"
 		set _flag=1
 	)
 )
 
+rem //in case game its not found in arcade.txt
 if %_flag% equ 0 (echo       "label": "%~n1",)>>"%_folder%.lpl"
 		
 
@@ -85,23 +85,33 @@ exit /b
 
 
 :make_dat
+rem //only for arcade games
+
+title may take a while...
+cls&echo Making arcade.txt...
 
 cd /d "%~dp0"
-if not exist "_bin\xidel.exe" echo. This script needs _bin\xidel.exe to continue&pause&exit
+set "_tag=game"
+set "_skip="
 
-echo. making arcade.txt...
+>nul findstr /l "<header>" "%~1"&&set "_skip=skip=1 "
+>nul findstr /l "<machine" "%~1"&&set "_tag=machine"
 
-md _temp 2>nul
-_bin\xidel -s %1 -e "replace( $raw, '^<!DOCTYPE mame \[.+?\]>$', '', 'ms')" >_temp\temp.dat
+del arcade.txt
+for /f "%_skip%tokens=2,3 delims=><" %%g in ('findstr /l "<%_tag% <description>" "%~1"') do (
+	for /f tokens^=1^,2^ delims^=^" %%i in ("%%g") do (
+		if "%%i"=="%_tag% name=" (
+			call :save_var "%%j" "game"
+		)else (
+			call :save_var "%%h" "description"
+		)
+	)
+)
+pause&exit
 
-for /f "delims=" %%g in ('_bin\xidel -s --output-format=cmd _temp\temp.dat 
-		-e "_tag:=matches( $raw, '<machine name=\""\w+\""')"') do %%g
+:save_var
 
-if %_tag%==true (set "_tag=machine")else (set "_tag=game")
-
-_bin\xidel -s _temp\temp.dat -e "//%_tag%/(@name|description)" >_temp\temp.1
-_bin\xidel -s _temp\temp.1 -e "replace( $raw, '^(\w+)\r\n(.+?)$', '$1|$2', 'm')" >arcade.txt
-
-del _temp\temp.1 _temp\temp.dat & rd _temp
-
-exit
+if "%~1"=="" set "_game=BIOS"&exit /b
+if "%~2"=="game" set "_game=%~1"&exit /b
+for %%g in ("%~1") do (echo %_game%^|%%~g)>>arcade.txt
+exit /b
